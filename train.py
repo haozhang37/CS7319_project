@@ -1,0 +1,121 @@
+import torch
+import torch.nn.functional as F
+import torchvision.transforms as T
+import argparse
+import numpy as np
+import torchvision
+from models.simple_lmser import SimpleLmser
+from matplotlib import pyplot as plt
+import os
+import random
+
+
+def set_seed_pytorch(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def train(args, model, trainloader, optimizer):
+    Loss = 0
+    for i, data in enumerate(trainloader):
+        img, _ = data
+        img = img.to(args.device)
+        bs = img.size(0)
+        img = img.view(bs, -1)
+        y = model(img)
+        loss = F.mse_loss(img, y)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        model.set_DCW()
+        Loss += loss.detach().cpu().item()
+        print(f"{i} train loss:{Loss / (i + 1)}")
+    return Loss / (i + 1)
+
+
+def test(args, model, testloader):
+    Loss = 0
+    with torch.no_grad():
+        for i, data in enumerate(testloader):
+            img, _ = data
+            img = img.to(args.device)
+            bs = img.size(0)
+            img = img.view(bs, -1)
+            y = model(img)
+            loss = F.mse_loss(img, y)
+            Loss += loss.cpu().item()
+            print(f"{i} test loss:{Loss / (i + 1)}")
+    return Loss / (i + 1)
+
+
+def draw(args,train_list, test_list, path):
+    x = np.arange(len(train_list))
+    plt.figure()
+    plt.plot(x, np.array(train_list), color="blue")
+    plt.plot(x, np.array(test_list), color="red")
+    plt.savefig(f"{path}curves_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_lr-{args.lr}.png")
+    plt.close()
+
+
+def main(args):
+    mean, std = (0.1307,), (0.3081,)
+    if not os.path.exists(args.save_path):
+        os.makedirs(args.save_path)
+
+    train_trans = T.Compose((T.RandomHorizontalFlip(0.5), T.ToTensor(), T.Normalize(mean=mean, std=std)))
+    test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
+    set_seed_pytorch(args.epoch + args.layer_num * 100)
+    model = SimpleLmser(class_num=10, layer_num=args.layer_num, reflect_num=args.reflect_num, channel=args.channel)
+    trainset = torchvision.datasets.MNIST(root="./data/MNIST/", train=True, download=True, transform=train_trans)
+    testset = torchvision.datasets.MNIST(root="./data/MNIST/", train=False, download=True, transform=test_trans)
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False)
+    # params = []
+    model.to(args.device)
+    # for i in range(args.layer_num):
+    #     model.fc[i].to(args.device)
+    #     model.dec_fc[i].to(args.device)
+    #     params.append({"params": model.fc[i].parameters()})
+    #     params.append({"params": model.dec_fc[i].parameters()})
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    train_list = []
+    test_list = []
+
+    for epoch in range(args.epoch):
+        set_seed_pytorch(args.epoch + args.layer_num * 10 + epoch * 100 + args.reflect_num * 1000)
+        train_loss = train(args, model, train_loader, optimizer)
+        model.eval()
+        set_seed_pytorch(args.epoch + args.layer_num * 20 + epoch * 200 + args.reflect_num * 2000)
+        test_loss = test(args, model, test_loader)
+        model.train()
+        train_list.append(train_loss)
+        test_list.append(test_loss)
+        draw(args, train_list, test_list, args.save_path)
+        if epoch % 10 == 0 or epoch == args.epoch - 1:
+            torch.save(model, args.save_path + f"model_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_lr-{args.lr}_epoch-{epoch}.pkl")
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Run tracker.')
+    parser.add_argument("--lr", type=float, default=1e-2)
+    parser.add_argument("--bs", type=int, default=64)
+    parser.add_argument("--epoch", type=int, default=100)
+    parser.add_argument("--momentum", type=float, default=0.9)
+    parser.add_argument("--weight_decay", type=float, default=5e-4)
+    parser.add_argument("--device", type=str, default="0")
+    parser.add_argument("--save_path", type=str, default="./result/simple_lmser/")
+
+    parser.add_argument("--class_num", type=int, default=128)
+    parser.add_argument("--layer_num", type=int, default=3)
+    parser.add_argument("--reflect_num", type=int, default=3)
+    parser.add_argument("--channel", type=int, default=128)
+    args = parser.parse_args()
+    if args.device != "cpu":
+        args.device = int(args.device)
+    main(args)
