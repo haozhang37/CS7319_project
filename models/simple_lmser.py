@@ -23,11 +23,19 @@ class SimpleLmser(nn.Module):
             self.dec_fc.append(nn.Linear(out_c, in_c, bias=False))
 
         self.set_DCW()
+        #self.set_DPN()
 
     def set_DCW(self):
         for i in range(self.layer_num):
             self.fc[i].weight.data = (self.fc[i].weight + self.dec_fc[i].weight.transpose(0, 1)) / 2
             self.dec_fc[i].weight.data = self.fc[i].weight.data.transpose(0, 1)
+    
+    def set_DPN(self):
+        for i in range(self.layer_num):
+            self.fc[i].weight.data = (self.fc[i].weight + self.dec_fc[i].weight.transpose(0, 1)) / 2
+            weight = np.array(self.fc[i].weight.data)
+            dec_weight = np.linalg.pinv(weight)
+            self.dec_fc[i].weight.data = torch.from_numpy(dec_weight)
 
     def forward(self, x):
         recurrent = [0 for _ in range(self.layer_num)]
