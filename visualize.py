@@ -36,7 +36,12 @@ def main(args):
         os.makedirs(args.save_path)
 
     test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
-    testset = torchvision.datasets.MNIST(root="./data/MNIST/", train=False, download=True, transform=test_trans)
+    if args.dataset == "MNIST":
+        testset = torchvision.datasets.MNIST(root="./data/MNIST/", train=False, download=True, transform=test_trans)
+    elif args.dataset == "F-MNIST":
+        testset = torchvision.datasets.FashionMNIST(root="./data/F-MNIST/", train=False, download=True, transform=test_trans)
+    else:
+        raise RuntimeError("Invalid dataset name!")
     test_loader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False)
     model = torch.load(args.save_path + f"model_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_lr-{args.lr}_epoch-{args.epoch - 1}.pkl", map_location=lambda storage, loc: storage.cuda(args.device))
 
@@ -53,6 +58,7 @@ if __name__ == '__main__':
     parser.add_argument("--device", type=str, default="1")
     parser.add_argument("--save_path", type=str, default="./result/simple_lmser/")
     parser.add_argument("--visualize_num", type=int, default=10)
+    parser.add_argument("--dataset", type=str, default="F-MNIST", choices=["MNIST", "F-MNIST"])
 
     parser.add_argument("--class_num", type=int, default=10)
     parser.add_argument("--layer_num", type=int, default=3)
@@ -61,4 +67,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.device != "cpu":
         args.device = int(args.device)
+    args.save_path = args.save_path + f"{args.dataset}/"
     main(args)
