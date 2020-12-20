@@ -58,11 +58,11 @@ if __name__ == '__main__':
     parser.add_argument("--device", type=str, default="1")
     parser.add_argument("--save_path", type=str, default="./result/simple_lmser/")
     parser.add_argument("--visualize_num", type=int, default=10)
-    parser.add_argument("--dataset", type=str, default="F-MNIST", choices=["MNIST", "F-MNIST"])
+    parser.add_argument("--dataset", type=str, default="MNIST", choices=["MNIST", "F-MNIST"])
 
     parser.add_argument("--class_num", type=int, default=10)
     parser.add_argument("--layer_num", type=int, default=3)
-    parser.add_argument("--reflect_num", type=int, default=2)
+    parser.add_argument("--reflect_num", type=int, default=3)
     parser.add_argument("--channel", type=int, default=128)
     args = parser.parse_args()
     if args.device != "cpu":
