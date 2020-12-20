@@ -70,7 +70,7 @@ def main(args):
     train_trans = T.Compose((T.RandomHorizontalFlip(0.5), T.ToTensor(), T.Normalize(mean=mean, std=std)))
     test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
     set_seed_pytorch(args.epoch + args.layer_num * 100)
-    model = SimpleLmser(class_num=10, layer_num=args.layer_num, reflect_num=args.reflect_num, channel=args.channel)
+    model = SimpleLmser(class_num=args.class_num, layer_num=args.layer_num, reflect_num=args.reflect_num, channel=args.channel)
     trainset = torchvision.datasets.MNIST(root="./data/MNIST/", train=True, download=True, transform=train_trans)
     testset = torchvision.datasets.MNIST(root="./data/MNIST/", train=False, download=True, transform=test_trans)
     train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True)
@@ -103,7 +103,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run tracker.')
-    parser.add_argument("--lr", type=float, default=1e-2)
+    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--momentum", type=float, default=0.9)
@@ -111,9 +111,9 @@ if __name__ == '__main__':
     parser.add_argument("--device", type=str, default="0")
     parser.add_argument("--save_path", type=str, default="./result/simple_lmser/")
 
-    parser.add_argument("--class_num", type=int, default=128)
+    parser.add_argument("--class_num", type=int, default=10)
     parser.add_argument("--layer_num", type=int, default=3)
-    parser.add_argument("--reflect_num", type=int, default=3)
+    parser.add_argument("--reflect_num", type=int, default=2)
     parser.add_argument("--channel", type=int, default=128)
     args = parser.parse_args()
     if args.device != "cpu":
