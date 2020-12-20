@@ -33,7 +33,10 @@ def train(args, model, trainloader, optimizer):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        
         model.set_DCW()
+        #model.set_DPN()
+        
         Loss += loss.detach().cpu().item()
         print(f"{i} train loss:{Loss / (i + 1)}")
     return Loss / (i + 1)
