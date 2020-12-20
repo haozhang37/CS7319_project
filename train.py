@@ -8,6 +8,7 @@ from models.simple_lmser import SimpleLmser
 from matplotlib import pyplot as plt
 import os
 import random
+import math
 
 
 def set_seed_pytorch(seed):
@@ -87,8 +88,13 @@ def main(args):
     train_list = []
     test_list = []
 
+    log_lr_st = math.log10(args.lr)
+    lr_epoch = torch.logspace(log_lr_st, log_lr_st - 1, steps=args.epoch)
+
     for epoch in range(args.epoch):
         set_seed_pytorch(args.epoch + args.layer_num * 10 + epoch * 100 + args.reflect_num * 1000)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr_epoch[epoch]
         train_loss = train(args, model, train_loader, optimizer)
         model.eval()
         set_seed_pytorch(args.epoch + args.layer_num * 20 + epoch * 200 + args.reflect_num * 2000)
@@ -113,7 +119,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--class_num", type=int, default=10)
     parser.add_argument("--layer_num", type=int, default=3)
-    parser.add_argument("--reflect_num", type=int, default=2)
+    parser.add_argument("--reflect_num", type=int, default=3)
     parser.add_argument("--channel", type=int, default=128)
     args = parser.parse_args()
     if args.device != "cpu":
