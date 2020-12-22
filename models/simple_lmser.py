@@ -78,10 +78,8 @@ class Pse_Inv_Lmser(nn.Module):
 
     def forward(self, x):
         for i in range(self.reflect):
-            short_cut = []
             for j in range(self.layer_num):
                 x = self.fc[j](x)
-            recurrent = []
             for j in range(self.layer_num):
                 l = self.layer_num - j - 1
                 x = self.dec_fc[l](x)
