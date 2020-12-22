@@ -4,9 +4,9 @@ import numpy.linalg as LA
 
 def weight_analysis(w1, w2):
     rela_transpose = LA.norm(np.transpose(w1) - w2)
-    print("transpose relationship: ", rela_transpose)
+    print("transpose distance: ", rela_transpose)
     rela_inverse = LA.norm(LA.pinv(w1) - w2)
-    print("inverse relationship: ", rela_inverse)
+    print("inverse distance: ", rela_inverse)
 
 
 def try_construct():

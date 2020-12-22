@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 import os
 import random
 import math
-
+from util import weight_analysis
 
 def set_seed_pytorch(seed):
     random.seed(seed)
@@ -35,7 +35,9 @@ def train(args, model, trainloader, optimizer):
         optimizer.step()
         model.set_DPN()
         Loss += loss.detach().cpu().item()
-        print(f"{i} train loss:{Loss / (i + 1)}")
+        # print(f"{i} train loss:{Loss / (i + 1)}")
+        if i % 100 == 0:
+            print(f"{i} train loss:{Loss / (i + 1)}")
     return Loss / (i + 1)
 
 
@@ -50,7 +52,8 @@ def test(args, model, testloader):
             y = model(img)
             loss = F.mse_loss(img, y)
             Loss += loss.cpu().item()
-            print(f"{i} test loss:{Loss / (i + 1)}")
+            if i % 50 == 0:
+                print(f"{i} test loss:{Loss / (i + 1)}")
     return Loss / (i + 1)
 
 
@@ -112,12 +115,45 @@ def main(args):
         if epoch % 10 == 0 or epoch == args.epoch - 1:
             torch.save(model, args.save_path + f"model_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_lr-{args.lr}_epoch-{epoch}.pkl")
 
+    print("finished training")
+    # weight analysis
+    with torch.no_grad():
+        print("weight analysis start:")
+        for i in range(args.layer_num):
+            w1 = model.fc[i].weight.to('cpu').numpy()
+            w2 = model.dec_fc[i].weight.to('cpu').numpy()
+            print(f"weight analysis: fc[{i}].weight[] and dec_fc[{i}].weight:")
+            weight_analysis(w1, w2)
+
+# =====================Lmser without DPN========================
+# weight analysis start:
+# weight analysis: fc[0].weight and dec_fc[0].weight:
+# transpose distance:  10.27124
+# inverse distance:  6.3389487
+# weight analysis: fc[1].weight and dec_fc[1].weight:
+# transpose distance:  2831.982
+# inverse distance:  4351.746
+# weight analysis: fc[2].weight and dec_fc[2].weight:
+# transpose distance:  1.0128667
+# inverse distance:  0.35673222
+
+# =====================Lmser with DPN ==========================
+# weight analysis start:
+# weight analysis: fc[0].weight and dec_fc[0].weight:
+# transpose distance:  0.0007783578
+# inverse distance:  0.0
+# weight analysis: fc[1].weight and dec_fc[1].weight:
+# transpose distance:  0.0009829665
+# inverse distance:  0.0
+# weight analysis: fc[2].weight and dec_fc[2].weight:
+# transpose distance:  4.3793516e-06
+# inverse distance:  0.0
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run tracker.')
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--bs", type=int, default=64)
-    parser.add_argument("--epoch", type=int, default=100)
+    parser.add_argument("--epoch", type=int, default=2)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight_decay", type=float, default=5e-4)
     parser.add_argument("--device", type=str, default="0")
