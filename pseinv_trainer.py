@@ -36,7 +36,8 @@ def train(args, model, trainloader, optimizer):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        model.set_DPN()
+        if args.use_dpn:
+            model.set_DPN()
         Loss += loss.detach().cpu().item()
         # print(f"{i} train loss:{Loss / (i + 1)}")
         if i % 10 == 0:
@@ -161,7 +162,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run tracker.')
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--bs", type=int, default=64)
-    parser.add_argument("--epoch", type=int, default=2)
+    parser.add_argument("--epoch", type=int, default=10)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight_decay", type=float, default=5e-4)
     parser.add_argument("--device", type=str, default="0")
@@ -172,6 +173,8 @@ if __name__ == '__main__':
     parser.add_argument("--layer_num", type=int, default=3)
     parser.add_argument("--reflect_num", type=int, default=1)
     parser.add_argument("--channel", type=int, default=128)
+
+    parser.add_argument("--use_dpn", type=bool, default=False)
 
     # small sample learning
     parser.add_argument("--use_small_samples", type=bool, default=True)
@@ -184,3 +187,9 @@ if __name__ == '__main__':
         args.device = int(args.device)
     args.save_path = args.save_path + f"{args.dataset}/"
     main(args)
+
+
+# 0 test loss:0.6422024965286255
+# 50 test loss:0.6466593309944751
+# 100 test loss:0.6689757533592753
+# 150 test loss:0.6889516170451183
