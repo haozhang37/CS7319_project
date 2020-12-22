@@ -71,33 +71,18 @@ class Pse_Inv_Lmser(nn.Module):
 
     def set_DPN(self):
         for i in range(self.layer_num):
+            self.fc[i].weight.data = (self.fc[i].weight + self.dec_fc[i].weight.transpose(0, 1)) / 2
             weight = np.array(self.fc[i].weight.data.cpu())
             dec_weight = np.linalg.pinv(weight)
             self.dec_fc[i].weight.data = torch.from_numpy(dec_weight).to(self.fc[i].weight.data.device)
 
     def forward(self, x):
-        recurrent = [0 for _ in range(self.layer_num)]
         for i in range(self.reflect):
-            short_cut = []
             for j in range(self.layer_num):
-                # x = self.fc[j](x + recurrent[j])
-                if j != self.layer_num - 1:
-                    # x = F.relu(self.fc[j](x + recurrent[j]))
-                    x = F.sigmoid(self.fc[j](x + recurrent[j]))
-                else:
-                    x = self.fc[j](x + recurrent[j])
-                short_cut.append(x)
-            recurrent = []
+                x = self.fc[j](x)
             for j in range(self.layer_num):
                 l = self.layer_num - j - 1
-                if j != self.layer_num - 1:
-                    # x = self.dec_fc[l](x + short_cut[l])
-                    # x = F.relu(self.dec_fc[l](x + short_cut[l]))
-                    x = F.sigmoid(self.dec_fc[l](x + short_cut[l]))
-                else:
-                    x = self.dec_fc[l](x + short_cut[l])
-                recurrent.append(x)
-            recurrent = recurrent[::-1]
+                x = self.dec_fc[l](x)
         return x
 
 
