@@ -10,6 +10,9 @@ import os
 import random
 import math
 from util import weight_analysis
+from torch.utils.data import DataLoader
+from samplers import CategoriesSampler
+
 
 def set_seed_pytorch(seed):
     random.seed(seed)
@@ -36,7 +39,7 @@ def train(args, model, trainloader, optimizer):
         model.set_DPN()
         Loss += loss.detach().cpu().item()
         # print(f"{i} train loss:{Loss / (i + 1)}")
-        if i % 100 == 0:
+        if i % 10 == 0:
             print(f"{i} train loss:{Loss / (i + 1)}")
     return Loss / (i + 1)
 
@@ -83,7 +86,12 @@ def main(args):
         testset = torchvision.datasets.FashionMNIST(root="./data/F-MNIST/", train=False, download=True, transform=test_trans)
     else:
         raise RuntimeError("Invalid dataset name!")
-    train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True)
+
+    if args.use_small_samples:
+        sampler = CategoriesSampler(trainset.targets, args.num_batch, args.way, args.n_per_batch)
+        train_loader = DataLoader(trainset, batch_sampler=sampler, pin_memory=True)
+    else:
+        train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True)
     test_loader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False)
     # params = []
     model.to(args.device)
@@ -164,6 +172,13 @@ if __name__ == '__main__':
     parser.add_argument("--layer_num", type=int, default=3)
     parser.add_argument("--reflect_num", type=int, default=1)
     parser.add_argument("--channel", type=int, default=128)
+
+    # small sample learning
+    parser.add_argument("--use_small_samples", type=bool, default=True)
+    parser.add_argument("--num_batch", type=int, default=100)
+    parser.add_argument("--n_per_batch", type=int, default=20)
+    parser.add_argument("--way", type=int, default=5)
+
     args = parser.parse_args()
     if args.device != "cpu":
         args.device = int(args.device)
