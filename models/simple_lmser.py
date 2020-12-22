@@ -52,12 +52,14 @@ class SimpleLmser(nn.Module):
 
 
 class Pse_Inv_Lmser(nn.Module):
-    def __init__(self, class_num=10, reflect_num=3, layer_num=3, channel=128, img_size=28):
+    def __init__(self, class_num=10, reflect_num=3, layer_num=3, channel=128, img_size=28, use_short_cut=False, use_activation=False):
         super(Pse_Inv_Lmser, self).__init__()
         self.fc = nn.ModuleList([])
         self.dec_fc = nn.ModuleList([])
         self.layer_num = layer_num
         self.reflect = reflect_num
+        self.use_short_cut = use_short_cut
+        self.use_activation = use_activation
         for i in range(self.layer_num):
             in_c, out_c = channel, channel
             if i == 0:
@@ -76,21 +78,53 @@ class Pse_Inv_Lmser(nn.Module):
             dec_weight = np.linalg.pinv(weight)
             self.dec_fc[i].weight.data = torch.from_numpy(dec_weight).to(self.fc[i].weight.data.device)
 
+    # def forward(self, x):
+    #     for i in range(self.reflect):
+    #         for j in range(self.layer_num):
+    #             x = self.fc[j](x)
+    #         for j in range(self.layer_num):
+    #             l = self.layer_num - j - 1
+    #             x = self.dec_fc[l](x)
+    #     return x
+
     def forward(self, x):
+        recurrent = [0 for _ in range(self.layer_num)]
         for i in range(self.reflect):
+            short_cut = []
+
             for j in range(self.layer_num):
-                x = self.fc[j](x)
+                if j != self.layer_num - 1 and self.use_activation:
+                    x = F.sigmoid(self.fc[j](x + recurrent[j]))
+                else:
+                    x = self.fc[j](x + recurrent[j])
+                short_cut.append(x)
+            recurrent = []
+
             for j in range(self.layer_num):
                 l = self.layer_num - j - 1
-                x = self.dec_fc[l](x)
+                if j != self.layer_num - 1 and self.use_activation:
+                    # x = self.dec_fc[l](x + short_cut[l])
+                    # x = F.relu(self.dec_fc[l](x + short_cut[l]))
+                    if self.use_short_cut:
+                        x = F.sigmoid(self.dec_fc[l](x + short_cut[l]))
+                    else:
+                        x = F.sigmoid(self.dec_fc[l](x))
+                else:
+                    if self.use_short_cut:
+                        x = self.dec_fc[l](x + short_cut[l])
+                    else:
+                        x = self.dec_fc[l](x)
+                recurrent.append(x)
+            recurrent = recurrent[::-1]
         return x
 
 
 if __name__ == '__main__':
     x = torch.randn((10, 28 * 28))
-    model = Pse_Inv_Lmser(class_num=10, reflect_num=1)
+    model = Pse_Inv_Lmser(class_num=10, reflect_num=1, use_activation=True)
     y = model(x)
     z = y.sum()
     z.backward()
     print(x.size())
     print(y.size())
+    print(model)
