@@ -31,6 +31,19 @@ inverse distance:  0.0
 weight analysis: fc[2].weight and dec_fc[2].weight:
 transpose distance:  4.3793516e-06
 inverse distance:  0.0
+
+=====================Lmser with DCW ========================
+weight analysis start:
+weight analysis: fc[0].weight[] and dec_fc[0].weight:
+transpose distance:  0.0
+inverse distance:  9.055498
+weight analysis: fc[1].weight[] and dec_fc[1].weight:
+transpose distance:  0.0
+inverse distance:  565.1025
+weight analysis: fc[2].weight[] and dec_fc[2].weight:
+transpose distance:  0.0
+inverse distance:  0.826585
+
 ```
 
 ### 3 reconstruction in few-shot learning scenarios
@@ -45,22 +58,21 @@ we sample a small train epoch from MNIST/F-MNIST, each epoch contain `num_batch`
  #### train loss
   |scenarios     | AE   | Lmser(DPN) | Lmser(DCW) |
   | ---          | ---  | -----      | ---- |
-  | 5-way 1-shot | 0.60 |    0.44    |      |
-  | 5-way 2-shot | 0.59 |    0.44    |      |
-  | 5-way 3-shot | 0.58 |   0.42    |      |
-  | 5-way 4-shot | 0.58 |   0.43    |      |
-  | 5-way 5-shot | 0.57 |    0.41    |      |
+  | 5-way 1-shot | 0.60 |    0.44    | 0.41 |
+  | 5-way 2-shot | 0.59 |    0.44    | 0.41 |
+  | 5-way 3-shot | 0.58 |    0.42    | 0.41 |
+  | 5-way 4-shot | 0.58 |    0.43    | 0.41 |
+  | 5-way 5-shot | 0.57 |    0.41    | 0.41 |
 
  #### test loss
  
  |scenarios     | AE   | Lmser(DPN) | Lmser(DCW) |
  | ---          | ---  | -----      | ---- |
- | 5-way 1-shot | 0.60 |    0.44    |      |
- | 5-way 2-shot | 0.59 |    0.44    |      |
- | 5-way 3-shot | 0.57 |   0.42    |      |
- | 5-way 4-shot | 0.58 |   0.42    |      |
- | 5-way 5-shot | 0.57 |    0.41    |      |
+ | 5-way 1-shot | 0.60 |    0.44    | 0.40 |
+ | 5-way 2-shot | 0.59 |    0.44    | 0.40 |
+ | 5-way 3-shot | 0.57 |    0.42    | 0.40 |
+ | 5-way 4-shot | 0.58 |    0.42    | 0.40 |
+ | 5-way 5-shot | 0.57 |    0.41    | 0.40 |
 
-![few shot learning performance](imgs/few_shot_performance.png)
 
 besides training loss, we found that Lmser(with DPN) converges much faster than traditional AutoDecoder
