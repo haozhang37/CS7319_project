@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.linalg as LA
-
+import torch
+import random
 
 def weight_analysis(w1, w2):
     rela_transpose = LA.norm(np.transpose(w1) - w2)
@@ -21,6 +22,14 @@ def try_construct():
     xr = np.matmul(Ai, y)
 
     print(np.linalg.norm(xr-x))
+
+def set_seed_pytorch(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 if __name__=='__main__':

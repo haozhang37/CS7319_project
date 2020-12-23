@@ -1,16 +1,16 @@
 """ Sampler for dataloader. """
 import torch
 import numpy as np
-
+from util import set_seed_pytorch
 
 class CategoriesSampler():
     """The class to generate episodic data"""
 
-    def __init__(self, label, n_batch, n_cls, n_per):
+    def __init__(self, label, n_batch, n_cls, n_per, seed=0):
         self.n_batch = n_batch
         self.n_cls = n_cls
         self.n_per = n_per
-
+        self.seed = seed
         label = np.array(label)
         self.m_ind = []
         for i in range(max(label) + 1):

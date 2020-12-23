@@ -9,18 +9,10 @@ from matplotlib import pyplot as plt
 import os
 import random
 import math
-from util import weight_analysis
+from util import weight_analysis, set_seed_pytorch
 from torch.utils.data import DataLoader
 from samplers import CategoriesSampler
 
-
-def set_seed_pytorch(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
 
 def train(args, model, trainloader, optimizer):
@@ -179,7 +171,7 @@ if __name__ == '__main__':
     # small sample learning
     parser.add_argument("--use_small_samples", type=bool, default=True)
     parser.add_argument("--num_batch", type=int, default=100)
-    parser.add_argument("--n_per_batch", type=int, default=20)
+    parser.add_argument("--n_per_batch", type=int, default=5)
     parser.add_argument("--way", type=int, default=5)
 
     args = parser.parse_args()
@@ -189,7 +181,3 @@ if __name__ == '__main__':
     main(args)
 
 
-# 0 test loss:0.6422024965286255
-# 50 test loss:0.6466593309944751
-# 100 test loss:0.6689757533592753
-# 150 test loss:0.6889516170451183
