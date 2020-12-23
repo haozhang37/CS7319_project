@@ -32,8 +32,8 @@ def train(args, model, trainloader, optimizer):
             model.set_DPN()
         Loss += loss.detach().cpu().item()
         # print(f"{i} train loss:{Loss / (i + 1)}")
-        if i % 10 == 0:
-            print(f"{i} train loss:{Loss / (i + 1)}")
+
+    print(f"{i} train loss:{Loss / (i + 1)}")
     return Loss / (i + 1)
 
 
@@ -102,6 +102,7 @@ def main(args):
     lr_epoch = torch.logspace(log_lr_st, log_lr_st - 1, steps=args.epoch)
 
     for epoch in range(args.epoch):
+        print(f"=========epoch{epoch}===============")
         set_seed_pytorch(args.epoch + args.layer_num * 10 + epoch * 100 + args.reflect_num * 1000)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr_epoch[epoch]
@@ -137,7 +138,7 @@ def main(args):
 # weight analysis: fc[2].weight and dec_fc[2].weight:
 # transpose distance:  1.0128667
 # inverse distance:  0.35673222
-
+#
 # =====================Lmser with DPN ==========================
 # weight analysis start:
 # weight analysis: fc[0].weight and dec_fc[0].weight:
@@ -171,7 +172,7 @@ if __name__ == '__main__':
     # small sample learning
     parser.add_argument("--use_small_samples", type=bool, default=True)
     parser.add_argument("--num_batch", type=int, default=100)
-    parser.add_argument("--n_per_batch", type=int, default=5)
+    parser.add_argument("--n_per_batch", type=int, default=1)
     parser.add_argument("--way", type=int, default=5)
 
     args = parser.parse_args()
