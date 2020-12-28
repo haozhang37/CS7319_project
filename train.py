@@ -4,7 +4,8 @@ import torchvision.transforms as T
 import argparse
 import numpy as np
 import torchvision
-from models.simple_lmser import SimpleLmser
+from models.simple_lmser import SimpleLmser, AE, shortcut_AE, DCW_AE
+from models.cnn_lmser import CNNLmser
 from matplotlib import pyplot as plt
 import os
 import random
@@ -26,14 +27,17 @@ def train(args, model, trainloader, optimizer):
         img, _ = data
         img = img.to(args.device)
         bs = img.size(0)
-        img = img.view(bs, -1)
+        if "cnn" not in args.save_path:
+            img = img.view(bs, -1)
+
         y = model(img)
         loss = F.mse_loss(img, y)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        model.set_DCW()
+        if args.set_dcw:
+            model.set_DCW()
         Loss += loss.detach().cpu().item()
         print(f"{i} train loss:{Loss / (i + 1)}")
     return Loss / (i + 1)
@@ -46,7 +50,8 @@ def test(args, model, testloader):
             img, _ = data
             img = img.to(args.device)
             bs = img.size(0)
-            img = img.view(bs, -1)
+            if "cnn" not in args.save_path:
+                img = img.view(bs, -1)
             y = model(img)
             loss = F.mse_loss(img, y)
             Loss += loss.cpu().item()
@@ -59,36 +64,46 @@ def draw(args,train_list, test_list, path):
     plt.figure()
     plt.plot(x, np.array(train_list), color="blue")
     plt.plot(x, np.array(test_list), color="red")
-    plt.savefig(f"{path}curves_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_lr-{args.lr}.png")
+    plt.savefig(f"{path}curves_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_class-{args.class_num}_lr-{args.lr}.png")
     plt.close()
 
 
 def main(args):
-    mean, std = (0.1307,), (0.3081,)
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
 
-    train_trans = T.Compose((T.RandomHorizontalFlip(0.5), T.ToTensor(), T.Normalize(mean=mean, std=std)))
-    test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
     set_seed_pytorch(args.epoch + args.layer_num * 100)
-    model = SimpleLmser(class_num=args.class_num, layer_num=args.layer_num, reflect_num=args.reflect_num, channel=args.channel)
+    if "cnn" not in args.save_path:
+        model = DCW_AE(class_num=args.class_num, layer_num=args.layer_num, reflect_num=args.reflect_num, channel=args.channel)
+    else:
+        model = CNNLmser(class_num=args.class_num, layer_num=args.layer_num, reflect_num=args.reflect_num)
+
     if args.dataset == "MNIST":
+        mean, std = (0.1307,), (0.3081,)
+        train_trans = T.Compose((T.RandomHorizontalFlip(0.5), T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
         trainset = torchvision.datasets.MNIST(root="./data/MNIST/", train=True, download=True, transform=train_trans)
         testset = torchvision.datasets.MNIST(root="./data/MNIST/", train=False, download=True, transform=test_trans)
     elif args.dataset == "F-MNIST":
+        mean, std = (0.1307,), (0.3081,)
+        train_trans = T.Compose((T.RandomHorizontalFlip(0.5), T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
         trainset = torchvision.datasets.FashionMNIST(root="./data/F-MNIST/", train=True, download=True, transform=train_trans)
         testset = torchvision.datasets.FashionMNIST(root="./data/F-MNIST/", train=False, download=True, transform=test_trans)
+    elif args.dataset == "STL10":
+        mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+        train_trans = T.Compose((T.RandomHorizontalFlip(0.5), T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        trainset = torchvision.datasets.STL10(root="./data/STL10/", split="train", download=True,
+                                              transform=train_trans)
+        testset = torchvision.datasets.STL10(root="./data/STL10/", split="test", download=True,
+                                             transform=test_trans)
     else:
         raise RuntimeError("Invalid dataset name!")
     train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.bs, shuffle=True)
     test_loader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False)
     # params = []
     model.to(args.device)
-    # for i in range(args.layer_num):
-    #     model.fc[i].to(args.device)
-    #     model.dec_fc[i].to(args.device)
-    #     params.append({"params": model.fc[i].parameters()})
-    #     params.append({"params": model.dec_fc[i].parameters()})
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     train_list = []
@@ -110,24 +125,25 @@ def main(args):
         test_list.append(test_loss)
         draw(args, train_list, test_list, args.save_path)
         if epoch % 10 == 0 or epoch == args.epoch - 1:
-            torch.save(model, args.save_path + f"model_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_lr-{args.lr}_epoch-{epoch}.pkl")
+            torch.save(model, args.save_path + f"model_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_class-{args.class_num}_lr-{args.lr}_epoch-{epoch}.pkl")
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run tracker.')
-    parser.add_argument("--lr", type=float, default=1e-2)
+    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight_decay", type=float, default=5e-4)
-    parser.add_argument("--device", type=str, default="0")
-    parser.add_argument("--save_path", type=str, default="./result/simple_lmser/")
-    parser.add_argument("--dataset", type=str, default="F-MNIST", choices=["MNIST", "F-MNIST"])
+    parser.add_argument("--device", type=str, default="1")
+    parser.add_argument("--save_path", type=str, default="./result/cnn_lmser/")
+    parser.add_argument("--dataset", type=str, default="STL10", choices=["MNIST", "F-MNIST", "STL10"])
 
     parser.add_argument("--class_num", type=int, default=10)
-    parser.add_argument("--layer_num", type=int, default=3)
-    parser.add_argument("--reflect_num", type=int, default=2)
+    parser.add_argument("--layer_num", type=int, default=2)
+    parser.add_argument("--reflect_num", type=int, default=1)
     parser.add_argument("--channel", type=int, default=128)
+    parser.add_argument("--set_dcw", type=int, default=1)
     args = parser.parse_args()
     if args.device != "cpu":
         args.device = int(args.device)
