@@ -85,6 +85,7 @@ class Pse_Inv_Lmser_Classifier(nn.Module):
         self.dec_fc = nn.ModuleList([])
         self.layer_num = layer_num
         self.reflect = reflect_num
+        self.linear = nn.Linear(class_num, class_num)
         for i in range(self.layer_num):
             in_c, out_c = channel, channel
             if i == 0:
@@ -107,7 +108,7 @@ class Pse_Inv_Lmser_Classifier(nn.Module):
         for i in range(self.reflect):
             for j in range(self.layer_num):
                 x = self.fc[j](x)
-            y = x
+            y = self.linear(x)
             for j in range(self.layer_num):
                 l = self.layer_num - j - 1
                 x = self.dec_fc[l](x)
