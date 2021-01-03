@@ -141,9 +141,15 @@ def draw_TSNE(args, model, testloader):
     # 超参数
     # hyper parameters
     # SAVEDIR = "vis13/"
-    path = args.save_path + f"visualization/layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_lr-{args.lr}_epoch-{args.epoch - 1}/"
+    path = args.save_path + f"visualization/layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_class-{args.class_num}_lr-{args.lr}_epoch-{args.epoch - 1}/"
 
     all_score = []
+    all_features = []
+
+    def get_feature(module, input, output):
+        all_features.append(output)
+    for i in range(model.layer_num):
+        model.conv[i].register_forward_hook(get_feature)
     # 提取部分数据集
     for batch, (X_input, y) in enumerate(testloader):
         batch_score = []
@@ -151,40 +157,42 @@ def draw_TSNE(args, model, testloader):
         y = y.detach().numpy()
 
         # 预测
-        X_input = X_input.view(X_input.size(0), -1)
+        if "cnn" not in args.save_path:
+            X_input = X_input.view(X_input.size(0), -1)
         X_input = X_input.to(args.device)
-        _, Xs = model(X_input)
-
-        # y = y.to(args.device)
+        all_features = []
+        Xs = model(X_input)
+        if isinstance(Xs, tuple):
+            Xs = Xs[-1]
 
         # 分类正确率
-        X_res = Xs.detach().cpu().numpy()
-        print("resnet20 acc:", np.mean(np.argmax(X_res, axis=1) == y))
+        # X_res = Xs.detach().cpu().numpy()
+        # print("acc:", np.mean(np.argmax(X_res, axis=1) == y))
 
         # 分层画出结果
-        # for layer, X in enumerate(Xs):
-        # print("===========layer:{}============".format(layer))
-        X = tensor2np(Xs.cpu())
-        # print(X.shape)
+        for layer, X in enumerate(all_features):
+            print("===========layer:{}============".format(layer))
+            X = tensor2np(X.cpu())
+            # print(X.shape)
 
-        # 我们有了每层的数据 X 和 Y
-        layer = "output"
-        vmodel = manifold.TSNE(n_components=3)
-        X_ = vmodel.fit_transform(X)
-        ARI, AMI = cluster_score(X_, y)
-        score = [ARI, AMI, vmodel.kl_divergence_]
-        batch_score.append(score)
-        title = "TSNE-{}".format(layer)
-        print(title, "ARI, AMI , vars :{}".format(score))
+            # 我们有了每层的数据 X 和 Y
+            layer = "output"
+            vmodel = manifold.TSNE(n_components=3)
+            X_ = vmodel.fit_transform(X)
+            ARI, AMI = cluster_score(X_, y)
+            score = [ARI, AMI, vmodel.kl_divergence_]
+            batch_score.append(score)
+            title = "TSNE-{}".format(layer)
+            print(title, "ARI, AMI , vars :{}".format(score))
 
-        if batch == 0:
-            y_ = y[not_outliers(X_)]
-            X_draw = X_[not_outliers(X_)]
+            if batch == 0:
+                y_ = y[not_outliers(X_)]
+                X_draw = X_[not_outliers(X_)]
 
-            fig = plt.figure()
-            plot_embedding_3D(X_draw, y_, savepath=path + title, fig=fig, sub="111")
-            fig = plt.figure()
-            plot_embedding_2D(X_draw[:, :2], y_, savepath=path + title, fig=fig, sub="111")
+                fig = plt.figure()
+                plot_embedding_3D(X_draw, y_, savepath=path + title, fig=fig, sub="111")
+                fig = plt.figure()
+                plot_embedding_2D(X_draw[:, :2], y_, savepath=path + title, fig=fig, sub="111")
 
         all_score.append(batch_score)
         if batch >= 2:
@@ -195,7 +203,7 @@ def draw_TSNE(args, model, testloader):
 
 
 def visualization(args, model, testloader):
-    path = args.save_path + f"visualization/layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_lr-{args.lr}_epoch-{args.epoch - 1}/"
+    path = args.save_path + f"visualization/layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_class-{args.class_num}_lr-{args.lr}_epoch-{args.epoch - 1}/"
     if not os.path.exists(path):
         os.makedirs(path)
 
@@ -206,9 +214,11 @@ def visualization(args, model, testloader):
             img = img.to(args.device)
             size = img.size()
             bs = img.size(0)
-            img = img.view(bs, -1)
+            if "cnn" not in args.save_path:
+                img = img.view(bs, -1)
             y = model(img)
-
+            if isinstance(y, tuple):
+                y = y[0]
             norm_img = img[0].cpu().view(size)
             norm_img = (norm_img - torch.min(norm_img)) / (torch.max(norm_img) - torch.min(norm_img))
             norm_y = y[0].cpu().view(size)
@@ -220,39 +230,128 @@ def visualization(args, model, testloader):
                 break
 
 
-def main(args):
-    mean, std = (0.1307,), (0.3081,)
-    if not os.path.exists(args.save_path):
-        os.makedirs(args.save_path)
+def interpolate_forward(model, x, m=10):
 
-    test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
+    def inter(output):
+        ori_output = output
+        new_output = []
+        for i in range(m + 1):
+            new_output.append((ori_output[0] * float(m - i) / m + ori_output[1] * float(i) / m).unsqueeze(0))
+        new_output = torch.cat(new_output[:], 0).to(output.device)
+        return new_output
+
+    for i in range(model.reflect):
+        short_cut = []
+        for j in range(model.block_num):
+            for k in range(model.layer_num):
+                l = j * model.layer_num + k
+                if k != model.layer_num - 1 and j != model.block_num - 1:
+                    x = F.sigmoid(model.conv[l](x))
+                else:
+                    x = model.conv[l](x)
+                short_cut.append(inter(x))
+        y = x
+        x = inter(x)
+        for j in range(model.block_num):
+            for k in range(model.layer_num):
+                l = model.layer_num * model.block_num - j * model.layer_num - k - 1
+                if j != model.block_num - 1 and k != model.layer_num:
+                    x = F.sigmoid(model.dec_conv[l](x + short_cut[l]))
+                else:
+                    x = model.dec_conv[l](x + short_cut[l])
+    return x, y.view(y.size(0), -1)
+
+
+def interpolate(args, model, testset, k=10):
+    testloader = torch.utils.data.DataLoader(testset, batch_size=2, shuffle=False)
+    path = args.save_path + f"visualization/layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_class-{args.class_num}_lr-{args.lr}_epoch-{args.epoch - 1}/"
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    # def get_feature(module, input, output):
+    #     ori_output = output
+    #     new_output = []
+    #     for i in range(k + 1):
+    #         new_output.append((ori_output[0] * float(k - i) / k + ori_output[1] * float(i) / k).unsqueeze(0))
+    #     new_output = torch.cat(new_output[:], 0).to(output.device)
+    #     return new_output
+    # for layer in model.conv:
+    #     layer.register_forward_hook(get_feature)
+
+    with torch.no_grad():
+        for i, data in enumerate(testloader):
+            print(f"Visualizing {2 * i}-th and {2 * i + 1}-th image")
+            img, _ = data
+            img = img.to(args.device)
+            size = img.size()
+            bs = img.size(0)
+            if "cnn" not in args.save_path:
+                img = img.view(bs, -1)
+            y = interpolate_forward(model, img)
+            if isinstance(y, tuple):
+                y = y[0]
+            norm_img = img.cpu()
+            norm_img = (norm_img - torch.min(norm_img)) / (torch.max(norm_img) - torch.min(norm_img))
+            norm_y = y.cpu()
+            norm_y = (norm_y - torch.min(norm_y)) / (torch.max(norm_y) - torch.min(norm_y))
+            # torchvision.utils.save_image(norm_y[0], path + f"reconstruct_img-{2 * i}.jpg", normalize=True)
+            # torchvision.utils.save_image(norm_y[1], path + f"reconstruct_img-{2 * i + 1}.jpg", normalize=True)
+            torchvision.utils.save_image(norm_y, path + f"inter_reconstruct_img-{2 * i}-{2 * i + 1}.jpg", normalize=True, nrow=12)
+            torchvision.utils.save_image(norm_img[0], path + f"inter_original_img-{2 * i}.jpg", normalize=True)
+            torchvision.utils.save_image(norm_img[1], path + f"inter_original_img-{2 * i + 1}.jpg", normalize=True)
+
+            if i > args.visualize_num:
+                break
+
+
+def main(args):
     if args.dataset == "MNIST":
+        mean, std = (0.1307,), (0.3081,)
+        train_trans = T.Compose((T.RandomHorizontalFlip(0.5), T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        trainset = torchvision.datasets.MNIST(root="./data/MNIST/", train=True, download=True, transform=train_trans)
         testset = torchvision.datasets.MNIST(root="./data/MNIST/", train=False, download=True, transform=test_trans)
     elif args.dataset == "F-MNIST":
-        testset = torchvision.datasets.FashionMNIST(root="./data/F-MNIST/", train=False, download=True, transform=test_trans)
+        mean, std = (0.1307,), (0.3081,)
+        train_trans = T.Compose((T.RandomHorizontalFlip(0.5), T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        trainset = torchvision.datasets.FashionMNIST(root="./data/F-MNIST/", train=True, download=True,
+                                                     transform=train_trans)
+        testset = torchvision.datasets.FashionMNIST(root="./data/F-MNIST/", train=False, download=True,
+                                                    transform=test_trans)
+    elif args.dataset == "STL10":
+        mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+        train_trans = T.Compose((T.RandomHorizontalFlip(0.5), T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        test_trans = T.Compose((T.ToTensor(), T.Normalize(mean=mean, std=std)))
+        trainset = torchvision.datasets.STL10(root="./data/STL10/", split="train", download=True,
+                                              transform=train_trans)
+        testset = torchvision.datasets.STL10(root="./data/STL10/", split="test", download=True,
+                                             transform=test_trans)
     else:
         raise RuntimeError("Invalid dataset name!")
     test_loader = torch.utils.data.DataLoader(testset, batch_size=args.bs, shuffle=False)
+    # model = torch.load(args.save_path + f"model_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_class-{args.class_num}_lr-{args.lr}_epoch-{args.epoch - 1}.pkl", map_location=lambda storage, loc: storage.cuda(args.device))
     model = torch.load(args.save_path + f"model_layer-{args.layer_num}_reflect-{args.reflect_num}_channel-{args.channel}_lr-{args.lr}_epoch-{args.epoch - 1}.pkl", map_location=lambda storage, loc: storage.cuda(args.device))
     model.to(args.device)
     # visualization(args, model, test_loader)
-    draw_TSNE(args, model, test_loader)
+    # draw_TSNE(args, model, test_loader)
+    interpolate(args, model, testset)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run tracker.')
     parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--bs", type=int, default=1000)
+    parser.add_argument("--bs", type=int, default=1)
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight_decay", type=float, default=5e-4)
-    parser.add_argument("--device", type=str, default="0")
-    parser.add_argument("--save_path", type=str, default="./result/lmser_classifier/")
+    parser.add_argument("--device", type=str, default="1")
+    parser.add_argument("--save_path", type=str, default="./result/cnnlmser_classifier/")
     parser.add_argument("--visualize_num", type=int, default=10)
-    parser.add_argument("--dataset", type=str, default="MNIST", choices=["MNIST", "F-MNIST"])
+    parser.add_argument("--dataset", type=str, default="STL10", choices=["MNIST", "F-MNIST", "STL10"])
 
     parser.add_argument("--class_num", type=int, default=10)
-    parser.add_argument("--layer_num", type=int, default=3)
+    parser.add_argument("--layer_num", type=int, default=2)
     parser.add_argument("--reflect_num", type=int, default=1)
     parser.add_argument("--channel", type=int, default=128)
     args = parser.parse_args()
